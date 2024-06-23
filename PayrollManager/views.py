@@ -1,20 +1,18 @@
-from django.shortcuts import render
-
-# Create your views here.
+import calendar
 import pandas as pd
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.filters import OrderingFilter, SearchFilter
 from django.core.files.storage import default_storage
-
+from django_filters.rest_framework import DjangoFilterBackend
+import math
 
 from .models import Employee, Department, AttendanceRecord, EmployeeDepartment, Salary, Holiday, Configuration
-from .serializers import EmployeeSerializer, AttendanceRecordSerializer, SalarySerializer, DepartmentSerializer, EmployeeDepartmentSerializer, HolidaySerializer, ConfigurationSerializer
-
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import OrderingFilter, SearchFilter
+from .serializers import EmployeeSerializer, AttendanceRecordSerializer, SalarySerializer, DepartmentSerializer, \
+    EmployeeDepartmentSerializer, HolidaySerializer, ConfigurationSerializer
 
 
 class EmployeeViewSet(viewsets.ModelViewSet):
@@ -46,10 +44,18 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 class SalaryViewSet(viewsets.ModelViewSet):
     queryset = Salary.objects.all()
     serializer_class = SalarySerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
+    filterset_fields = ['id', 'employee', 'month', 'year', 'total_hours', 'salary_amount']
+    ordering_fields = ['employee', 'month', 'year', 'total_hours', 'salary_amount']
+    search_fields = ['employee__name', 'employee__employee_code', 'month', 'year']
+    ordering = ['employee']
+
+
 
 class HolidayViewSet(viewsets.ModelViewSet):
     queryset = Holiday.objects.all()
     serializer_class = HolidaySerializer
+
 
 class ConfigurationViewSet(viewsets.ModelViewSet):
     queryset = Configuration.objects.all()
@@ -57,10 +63,35 @@ class ConfigurationViewSet(viewsets.ModelViewSet):
 
 
 
+class EmployeeMonthlyAttendanceView(APIView):
+    def get(self, request, *args, **kwargs):
+        employee_code = request.query_params.get('employee_code')
+        month = request.query_params.get('month')
+        year = request.query_params.get('year')
+
+        if not employee_code or not month or not year:
+            return Response({'error': 'Employee code, month, and year are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            employee = Employee.objects.get(employee_code=employee_code)
+        except Employee.DoesNotExist:
+            return Response({'error': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        attendance_records = AttendanceRecord.objects.filter(
+            employee=employee,
+            date__year=year,
+            date__month=month
+        ).order_by('date')
+
+        serializer = AttendanceRecordSerializer(attendance_records, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 
 class UploadAttendanceFileView(APIView):
     def post(self, request, *args, **kwargs):
+
+        print("hello")
         files = request.FILES.getlist('files')
         month = request.data.get('month')
         year = request.data.get('year')
@@ -79,12 +110,14 @@ class UploadAttendanceFileView(APIView):
             default_storage.delete(file_path)
 
             if employee_info is None or attendance_data is None:
-                return Response({'error': f'Failed to process the attendance file {file.name}'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': f'Failed to process the attendance file {file.name}'},
+                                status=status.HTTP_400_BAD_REQUEST)
 
             # Process employee and attendance data
             employee = self.get_or_create_employee(employee_info)
             if employee is None:
-                return Response({'error': f'Failed to process employee data for file {file.name}'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': f'Failed to process employee data for file {file.name}'},
+                                status=status.HTTP_400_BAD_REQUEST)
 
             # Add attendance records
             self.add_attendance_records(employee, attendance_data)
@@ -208,22 +241,37 @@ class UploadAttendanceFileView(APIView):
             print(f"Error getting or creating employee: {e}")
             return None
 
+    # def add_attendance_records(self, employee, attendance_data):
+    #     try:
+    #         for record in attendance_data:
+    #             # Kiểm tra xem AttendanceRecord đã tồn tại chưa
+    #             if not AttendanceRecord.objects.filter(
+    #                 employee=employee,
+    #                 date=record['Date']
+    #             ).exists():
+    #                 AttendanceRecord.objects.create(
+    #                     employee=employee,
+    #                     date=record['Date'],
+    #                     morning_clock_in=record['Morning In'],
+    #                     morning_clock_out=record['Morning Out'],
+    #                     afternoon_clock_in=record['Afternoon In'],
+    #                     afternoon_clock_out=record['Afternoon Out']
+    #                 )
+    #     except Exception as e:
+    #         print(f"Error adding attendance records: {e}")
     def add_attendance_records(self, employee, attendance_data):
         try:
             for record in attendance_data:
-                # Kiểm tra xem AttendanceRecord đã tồn tại chưa
-                if not AttendanceRecord.objects.filter(
+                attendance_record, created = AttendanceRecord.objects.update_or_create(
                     employee=employee,
-                    date=record['Date']
-                ).exists():
-                    AttendanceRecord.objects.create(
-                        employee=employee,
-                        date=record['Date'],
-                        morning_clock_in=record['Morning In'],
-                        morning_clock_out=record['Morning Out'],
-                        afternoon_clock_in=record['Afternoon In'],
-                        afternoon_clock_out=record['Afternoon Out']
-                    )
+                    date=record['Date'],
+                    defaults={
+                        'morning_clock_in': record['Morning In'],
+                        'morning_clock_out': record['Morning Out'],
+                        'afternoon_clock_in': record['Afternoon In'],
+                        'afternoon_clock_out': record['Afternoon Out']
+                    }
+                )
         except Exception as e:
             print(f"Error adding attendance records: {e}")
 
@@ -235,4 +283,176 @@ class DepartmentListView(APIView):
         return Response(serializer.data)
 
 
+class SalaryCalculationView(APIView):
+    def post(self, request, *args, **kwargs):
+        employee_code = request.data.get('employee_code')
+        month = request.data.get('month')
+        year = request.data.get('year')
+        print(employee_code)
+        print(month)
+        print(year)
 
+        if not employee_code or not month or not year:
+            return Response({'error': 'Employee ID, month, and year are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        employee = Employee.objects.filter(employee_code=employee_code).first()
+        if not employee:
+            return Response({'error': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Gọi hàm tính lương
+        salary_data, errors = self.calculate_salary(employee, month, year)
+
+        if errors:
+            return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        # salary_data['employee'] = employee
+
+        # Tạo hoặc cập nhật bản ghi Salary
+        salary_instance, created = Salary.objects.update_or_create(
+            employee=employee,
+            month=month,
+            year=year,
+            defaults=salary_data
+        )
+
+        return Response(SalarySerializer(salary_instance).data, status=status.HTTP_201_CREATED)
+
+    def calculate_salary(self, employee, month, year):
+        errors = []
+
+        # Lấy tất cả các bản ghi chấm công trong tháng và năm cho nhân viên
+        attendance_records = AttendanceRecord.objects.filter(
+            employee=employee,
+            date__year=year,
+            date__month=month
+        )
+
+        config = Configuration.objects.first()
+        if not config:
+            return {}, [{'error': 'Configuration not found'}]
+
+        holidays = Holiday.objects.filter(month=month)
+        total_holidays = holidays.count()
+
+        basic_day_after_holidays = config.basic_days - total_holidays
+        basic_hours_after_holidays = basic_day_after_holidays * config.basic_hours_per_day
+
+        holiday_hours = total_holidays * config.basic_hours_per_day
+        worked_holiday_hours = 0
+
+        # Khởi tạo các biến lưu trữ giờ làm việc
+        actual_work_hours = 0
+        worked_days = 0
+        penalty_hours = 0
+        worked_day_off_days = 0
+        sunday_hours = 0
+        working_sunday_days = 0
+
+        average_hours_per_day = 0
+        worked_day_off_hours = 0
+        overtime_hours = 0
+        total_hours = 0
+        salary_amount = 0
+
+        for record in attendance_records:
+            morning_duration, afternoon_duration, daily_hours, day_errors = self.calculate_daily_hours(record)
+            if day_errors:
+                errors.append({
+                    'date': record.date,
+                    'errors': day_errors
+                })
+            else:
+                actual_work_hours += daily_hours
+
+                if morning_duration > 0:
+                    worked_days += 3 / 8
+                if afternoon_duration > 0:
+                    worked_days += 5 / 8
+                print(worked_days)
+                # Kiểm tra và tính toán giờ làm việc vào Chủ nhật
+                if record.date.weekday() == calendar.SUNDAY:
+                    sunday_hours += daily_hours
+                    working_sunday_days += 1
+
+                # Kiểm tra và tính toán giờ làm việc vào ngày lễ
+                if holidays.filter(day=record.date.day).exists():
+                    worked_holiday_hours += daily_hours
+        print(worked_days)
+        average_hours_per_day = actual_work_hours / worked_days if worked_days else 0
+        worked_day_off_days = worked_days - basic_day_after_holidays
+
+        if worked_day_off_days > 0:
+            # Validate valid sunday_hour
+            average_hours_per_sunday = sunday_hours / working_sunday_days
+            if (worked_day_off_days < working_sunday_days):
+                sunday_hours = average_hours_per_sunday * worked_day_off_days
+
+            worked_day_off_hours = (average_hours_per_day * worked_day_off_days) - sunday_hours
+
+        overtime_hours = max(0, actual_work_hours - basic_hours_after_holidays - sunday_hours - worked_day_off_hours)
+        print(f'abf {actual_work_hours - sunday_hours - worked_holiday_hours - worked_day_off_hours - overtime_hours}')
+        # Tính tổng số giờ
+        total_hours = (max(0,
+                           actual_work_hours - sunday_hours - worked_holiday_hours - worked_day_off_hours - overtime_hours)
+                       + sunday_hours * config.sunday_multiplier
+                       + holiday_hours
+                       + worked_holiday_hours * config.holiday_multiplier
+                       + worked_day_off_hours * config.worked_day_off_multiplier
+                       + overtime_hours * config.overtime_multiplier - penalty_hours)
+
+        # Tính số tiền lương
+        salary_amount = math.ceil(total_hours) * config.hourly_wage
+
+        salary_data = {
+            'employee': employee,
+            'month': month,
+            'year': year,
+            'basic_days_after_holidays': basic_day_after_holidays,
+            'basic_hours_after_holidays': basic_hours_after_holidays,
+            'actual_work_hours': actual_work_hours,
+            'worked_days': worked_days,
+            'penalty_hours': penalty_hours,
+            'worked_day_off_days': worked_day_off_days,
+            'sunday_hours': sunday_hours,
+            'holiday_hours': holiday_hours,
+            'worked_holiday_hours': worked_holiday_hours,
+            'average_hours_per_day': average_hours_per_day,
+            'worked_day_off_hours': worked_day_off_hours,
+            'overtime_hours': overtime_hours,
+            'total_hours': total_hours,
+            'salary_amount': salary_amount
+        }
+
+        return salary_data, errors
+
+    def calculate_daily_hours(self, record):
+        errors = []
+        total_hours = 0
+        morning_duration = 0
+        afternoon_duration = 0
+
+        def time_difference(start_time, end_time):
+            # Sử dụng một ngày cụ thể để tính toán sự khác biệt
+            start_datetime = datetime.combine(datetime.today(), start_time)
+            end_datetime = datetime.combine(datetime.today(), end_time)
+            return (end_datetime - start_datetime).total_seconds() / 3600
+
+        if record.morning_clock_in and record.morning_clock_out:
+            morning_duration += time_difference(record.morning_clock_in, record.morning_clock_out)
+            total_hours += morning_duration
+        elif record.morning_clock_in or record.morning_clock_out:
+            if not record.morning_clock_in:
+                errors.append(f'Missing morning clock-in time on {record.date}')
+            if not record.morning_clock_out:
+                errors.append(f'Missing morning clock-out time on {record.date}')
+
+        if record.afternoon_clock_in and record.afternoon_clock_out:
+            afternoon_duration += time_difference(record.afternoon_clock_in, record.afternoon_clock_out)
+            total_hours += afternoon_duration
+        elif record.afternoon_clock_in or record.afternoon_clock_out:
+            if not record.afternoon_clock_in:
+                errors.append(f'Missing afternoon clock-in time on {record.date}')
+            if not record.afternoon_clock_out:
+                errors.append(f'Missing afternoon clock-out time on {record.date}')
+
+        return morning_duration, afternoon_duration, total_hours, errors

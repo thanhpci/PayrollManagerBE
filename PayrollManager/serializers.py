@@ -29,6 +29,7 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
 
 
 class SalarySerializer(serializers.ModelSerializer):
+    employee = EmployeeSerializer()
     class Meta:
         model = Salary
         fields = '__all__'
