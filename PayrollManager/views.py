@@ -87,6 +87,13 @@ class EmployeeMonthlyAttendanceView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class DepartmentListView(APIView):
+    def get(self, request):
+        departments = Department.objects.all()
+        serializer = DepartmentSerializer(departments, many=True)
+        return Response(serializer.data)
+
+
 
 class UploadAttendanceFileView(APIView):
     def post(self, request, *args, **kwargs):
@@ -98,6 +105,8 @@ class UploadAttendanceFileView(APIView):
 
         if not files or not month or not year:
             return Response({'error': 'Files, month, and year are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        salary_responses = []
 
         for file in files:
             # Save file temporarily
@@ -122,7 +131,26 @@ class UploadAttendanceFileView(APIView):
             # Add attendance records
             self.add_attendance_records(employee, attendance_data)
 
-        return Response({'message': 'All files processed successfully'}, status=status.HTTP_200_OK)
+            # Call SalaryCalculationView to calculate salary
+            salary_calculation_view = SalaryCalculationView()
+            salary_request = request._request  # Get the original Django request
+            salary_request.data = {
+                'employee_code': employee.employee_code,
+                'month': month,
+                'year': year
+            }
+            salary_response = salary_calculation_view.post(salary_request)
+            salary_responses.append({
+                'employee_code': employee.employee_code,
+                'response': salary_response.data,
+                'status': salary_response.status_code
+            })
+
+        return Response({
+            'message': 'All files processed successfully',
+            'salary_responses': salary_responses
+        }, status=status.HTTP_200_OK)
+
 
     def process_attendance_file(self, file_path, month, year):
         try:
@@ -241,24 +269,6 @@ class UploadAttendanceFileView(APIView):
             print(f"Error getting or creating employee: {e}")
             return None
 
-    # def add_attendance_records(self, employee, attendance_data):
-    #     try:
-    #         for record in attendance_data:
-    #             # Kiểm tra xem AttendanceRecord đã tồn tại chưa
-    #             if not AttendanceRecord.objects.filter(
-    #                 employee=employee,
-    #                 date=record['Date']
-    #             ).exists():
-    #                 AttendanceRecord.objects.create(
-    #                     employee=employee,
-    #                     date=record['Date'],
-    #                     morning_clock_in=record['Morning In'],
-    #                     morning_clock_out=record['Morning Out'],
-    #                     afternoon_clock_in=record['Afternoon In'],
-    #                     afternoon_clock_out=record['Afternoon Out']
-    #                 )
-    #     except Exception as e:
-    #         print(f"Error adding attendance records: {e}")
     def add_attendance_records(self, employee, attendance_data):
         try:
             for record in attendance_data:
@@ -276,11 +286,6 @@ class UploadAttendanceFileView(APIView):
             print(f"Error adding attendance records: {e}")
 
 
-class DepartmentListView(APIView):
-    def get(self, request):
-        departments = Department.objects.all()
-        serializer = DepartmentSerializer(departments, many=True)
-        return Response(serializer.data)
 
 
 class SalaryCalculationView(APIView):
@@ -288,9 +293,7 @@ class SalaryCalculationView(APIView):
         employee_code = request.data.get('employee_code')
         month = request.data.get('month')
         year = request.data.get('year')
-        print(employee_code)
-        print(month)
-        print(year)
+
 
         if not employee_code or not month or not year:
             return Response({'error': 'Employee ID, month, and year are required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -303,6 +306,31 @@ class SalaryCalculationView(APIView):
         salary_data, errors = self.calculate_salary(employee, month, year)
 
         if errors:
+            Salary.objects.update_or_create(
+                employee=employee,
+                month=month,
+                year=year,
+                defaults={
+                    'basic_days_after_holidays': None,
+                    'basic_hours_after_holidays': None,
+                    'actual_work_hours': None,
+                    'worked_days': None,
+                    'penalty_hours': None,
+                    'worked_day_off_days': None,
+                    'sunday_hours': None,
+                    'holiday_hours': None,
+                    'worked_holiday_hours': None,
+                    'average_hours_per_day': None,
+                    'worked_day_off_hours': None,
+                    'overtime_hours': None,
+                    'total_hours': None,
+                    'salary_amount': None
+                }
+            )
+
+
+
+
             return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
 
         # salary_data['employee'] = employee
@@ -378,27 +406,35 @@ class SalaryCalculationView(APIView):
                 if holidays.filter(day=record.date.day).exists():
                     worked_holiday_hours += daily_hours
         print(worked_days)
+
         average_hours_per_day = actual_work_hours / worked_days if worked_days else 0
         worked_day_off_days = worked_days - basic_day_after_holidays
 
-        if worked_day_off_days > 0:
-            # Validate valid sunday_hour
-            average_hours_per_sunday = sunday_hours / working_sunday_days
-            if (worked_day_off_days < working_sunday_days):
-                sunday_hours = average_hours_per_sunday * worked_day_off_days
+        if worked_day_off_days >= 0:
+            worked_day_off_hours = (average_hours_per_day * worked_day_off_days)
+        else:
+            sunday_hours = 0
+            worked_day_off_days = 0
+            worked_day_off_hours = 0
 
-            worked_day_off_hours = (average_hours_per_day * worked_day_off_days) - sunday_hours
+        overtime_hours = max(0, actual_work_hours - basic_hours_after_holidays - worked_day_off_hours)
 
-        overtime_hours = max(0, actual_work_hours - basic_hours_after_holidays - sunday_hours - worked_day_off_hours)
-        print(f'abf {actual_work_hours - sunday_hours - worked_holiday_hours - worked_day_off_hours - overtime_hours}')
+
+        if actual_work_hours < basic_hours_after_holidays:
+            total_hour_none_bonus = max(0, actual_work_hours - worked_holiday_hours - worked_day_off_hours - overtime_hours)
+        else:
+            total_hour_none_bonus = basic_hours_after_holidays
+
+        print(f'none bonus: {total_hour_none_bonus}')
+
         # Tính tổng số giờ
-        total_hours = (max(0,
-                           actual_work_hours - sunday_hours - worked_holiday_hours - worked_day_off_hours - overtime_hours)
-                       + sunday_hours * config.sunday_multiplier
+        total_hours = (total_hour_none_bonus
                        + holiday_hours
                        + worked_holiday_hours * config.holiday_multiplier
                        + worked_day_off_hours * config.worked_day_off_multiplier
                        + overtime_hours * config.overtime_multiplier - penalty_hours)
+
+        print(f'total hour {total_hours}')
 
         # Tính số tiền lương
         salary_amount = math.ceil(total_hours) * config.hourly_wage
@@ -442,17 +478,30 @@ class SalaryCalculationView(APIView):
             total_hours += morning_duration
         elif record.morning_clock_in or record.morning_clock_out:
             if not record.morning_clock_in:
-                errors.append(f'Missing morning clock-in time on {record.date}')
+                errors.append({
+                    'error_type': 'morning_clock_in',
+                    'message': 'Missing morning clock-in time'
+                })
             if not record.morning_clock_out:
-                errors.append(f'Missing morning clock-out time on {record.date}')
+                errors.append({
+                    'error_type': 'morning_clock_out',
+                    'message': 'Missing morning clock-out time'
+                })
 
         if record.afternoon_clock_in and record.afternoon_clock_out:
             afternoon_duration += time_difference(record.afternoon_clock_in, record.afternoon_clock_out)
             total_hours += afternoon_duration
         elif record.afternoon_clock_in or record.afternoon_clock_out:
             if not record.afternoon_clock_in:
-                errors.append(f'Missing afternoon clock-in time on {record.date}')
+                errors.append({
+                    'error_type': 'afternoon_clock_in',
+                    'message': 'Missing afternoon clock-in time'
+                })
             if not record.afternoon_clock_out:
-                errors.append(f'Missing afternoon clock-out time on {record.date}')
+                errors.append({
+                    'error_type': 'afternoon_clock_out',
+                    'message': 'Missing afternoon clock-out time'
+                })
 
         return morning_duration, afternoon_duration, total_hours, errors
+

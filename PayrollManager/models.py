@@ -60,22 +60,20 @@ class Salary(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)  # Nhân viên
     month = models.IntegerField()  # Tháng tính lương (1-12)
     year = models.IntegerField()  # Năm tính lương
-    # basic_days = models.IntegerField()  # Số ngày cơ bản
-    basic_days_after_holidays = models.FloatField()  # Số ngày cơ bản sau lễ
-    # basic_hours = models.FloatField()  # Số giờ cơ bản
-    basic_hours_after_holidays = models.FloatField()  # Số giờ cơ bản sau lễ
-    actual_work_hours = models.FloatField()  # Số giờ làm việc thực tế
-    worked_days = models.FloatField()  # Số ngày đi làm
-    penalty_hours = models.FloatField()  # Số giờ vi phạm
-    worked_day_off_days = models.FloatField()  # Số ngày nghỉ đi làm
-    sunday_hours = models.FloatField()  # Số giờ làm vào Chủ nhật
-    holiday_hours = models.FloatField()  # Số giờ lễ
-    worked_holiday_hours = models.FloatField()  # Số giờ làm ngày lễ
-    average_hours_per_day = models.FloatField()  # Số giờ làm trung bình mỗi ngày
-    worked_day_off_hours = models.FloatField()  # Số giờ nghỉ đi làm
-    overtime_hours = models.FloatField()  # Số giờ làm thêm
-    total_hours = models.FloatField()  # Tổng số giờ
-    salary_amount = models.FloatField()  # Tổng số tiền lương
+    basic_days_after_holidays = models.FloatField(null=True, blank=True)  # Số ngày cơ bản sau lễ
+    basic_hours_after_holidays = models.FloatField(null=True, blank=True)  # Số giờ cơ bản sau lễ
+    actual_work_hours = models.FloatField(null=True, blank=True)  # Số giờ làm việc thực tế
+    worked_days = models.FloatField(null=True, blank=True)  # Số ngày đi làm
+    penalty_hours = models.FloatField(null=True, blank=True)  # Số giờ vi phạm
+    worked_day_off_days = models.FloatField(null=True, blank=True)  # Số ngày nghỉ đi làm
+    sunday_hours = models.FloatField(null=True, blank=True)  # Số giờ làm vào Chủ nhật
+    holiday_hours = models.FloatField(null=True, blank=True)  # Số giờ lễ
+    worked_holiday_hours = models.FloatField(null=True, blank=True)  # Số giờ làm ngày lễ
+    average_hours_per_day = models.FloatField(null=True, blank=True)  # Số giờ làm trung bình mỗi ngày
+    worked_day_off_hours = models.FloatField(null=True, blank=True)  # Số giờ nghỉ đi làm
+    overtime_hours = models.FloatField(null=True, blank=True)  # Số giờ làm thêm
+    total_hours = models.FloatField(null=True, blank=True)  # Tổng số giờ
+    salary_amount = models.FloatField(null=True, blank=True)  # Tổng số tiền lương
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
