@@ -81,7 +81,7 @@ class Salary(models.Model):
         unique_together = ('employee', 'month', 'year')  # Đảm bảo không có bản ghi lương trùng lặp
 
     def __str__(self):
-        return f"{self.employee.name} - {self.month}"
+        return f"{self.employee.name} - {self.month} - {self.year}"
 
 
 class Holiday(models.Model):

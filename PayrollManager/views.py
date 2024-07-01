@@ -94,6 +94,16 @@ class DepartmentListView(APIView):
         return Response(serializer.data)
 
 
+class SalaryAvailableMonthsView(APIView):
+    def get(self, request):
+        months = Salary.objects.values_list('month', flat=True).distinct()
+        return Response({'months': months})
+
+class SalaryAvailableYearsView(APIView):
+    def get(self, request):
+        years = Salary.objects.values_list('year', flat=True).distinct()
+        return Response({'years': years})
+
 
 class UploadAttendanceFileView(APIView):
     def post(self, request, *args, **kwargs):
