@@ -125,6 +125,8 @@ class UploadAttendanceFileView(APIView):
             # Process file
             employee_info, attendance_data = self.process_attendance_file(file_path, month, year)
 
+            print(f'post function attendance data {attendance_data}')
+
             # Clean up temporary file
             default_storage.delete(file_path)
 
@@ -189,7 +191,7 @@ class UploadAttendanceFileView(APIView):
 
             # Convert to DataFrame
             df = pd.DataFrame(rows[1:], columns=rows[0])  # Assumes first row as header
-
+            print(df)
             # Process DataFrame to extract attendance data for the given month and year
             attendance_data = self.extract_attendance_data(df, month, year)
 
@@ -227,25 +229,137 @@ class UploadAttendanceFileView(APIView):
             print(f"Error extracting info between '{start_keyword}' and '{end_keyword}': {e}")
             return None
 
+    # def extract_attendance_data(self, df, month, year):
+    #     # Convert first column to datetime
+    #     df.iloc[:, 0] = pd.to_datetime(df.iloc[:, 0], format='%Y-%m-%dT%H:%M:%S.%f', errors='coerce')    #
+    #
+    #     # Create start and end dates for the given month and year
+    #     start_date = datetime(int(year), int(month), 1)
+    #     end_date = (start_date + pd.DateOffset(months=1)) - pd.DateOffset(days=1)
+    #
+    #     # Filter rows by the given month and year
+    #     filtered_df = df[(df.iloc[:, 0] >= start_date) & (df.iloc[:, 0] <= end_date)]
+    #
+    #     # Select relevant columns
+    #     result_df = filtered_df.iloc[:, [0, 2, 3, 4, 5]]
+    #
+    #     # Rename columns
+    #     result_df.columns = ['Date', 'Morning In', 'Morning Out', 'Afternoon In', 'Afternoon Out']
+    #
+    #     # Convert DataFrame to dictionary
+    #     attendance_data = result_df.to_dict(orient='records')
+    #     return attendance_data
+    #
+    #
+
+    # def extract_attendance_data(self, df, month, year):
+    #
+    #     # Assuming the first column contains the datetime information
+    #     datetime_column = df.columns[0]
+    #
+    #     # Convert first column to datetime
+    #     # df[datetime_column] = pd.to_datetime(df[datetime_column], errors='coerce', infer_datetime_format=True)
+    #     df[datetime_column] = pd.to_datetime(df[datetime_column], errors='coerce')
+    #
+    #     # Create start and end dates for the given month and year
+    #     start_date = datetime(int(year), int(month), 1)
+    #     end_date = (start_date + pd.DateOffset(months=1)) - pd.DateOffset(days=1)
+    #
+    #     # Filter rows by the given month and year
+    #     filtered_df = df[(df[datetime_column] >= start_date) & (df[datetime_column] <= end_date)]
+    #
+    #     # Select relevant columns
+    #     result_df = filtered_df.iloc[:, [0, 2, 3, 4, 5]]
+    #
+    #     # Rename columns
+    #     result_df.columns = ['Date', 'Morning In', 'Morning Out', 'Afternoon In', 'Afternoon Out']
+    #
+    #     # Convert DataFrame to dictionary
+    #     attendance_data = result_df.to_dict(orient='records')
+    #     return attendance_data
+
+    import pandas as pd
+    from datetime import datetime
+
+    def try_parsing_date(self, text):
+        for fmt in ('%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%d/%m/%Y %H:%M:%S', '%d/%m/%Y'):
+            try:
+                return datetime.strptime(text, fmt)
+            except ValueError:
+                continue
+        return pd.NaT
+
+    from datetime import time
+
+    def try_parsing_time(self, text):
+        for fmt in ('%H:%M', '%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S', '%H:%M:%S'):
+            try:
+                parsed_time = datetime.strptime(text, fmt)
+                return parsed_time.strftime('%H:%M')
+            except ValueError:
+                continue
+        return None
+
+    # def extract_attendance_data(self, df, month, year):
+    #     # Assuming the first column contains the datetime information
+    #     datetime_column = df.columns[0]
+    #
+    #     df[datetime_column] = df[datetime_column].apply(lambda x: self.try_parsing_date(x) if pd.notnull(x) else pd.NaT)
+    #
+    #     # Create start and end dates for the given month and year
+    #     start_date = datetime(int(year), int(month), 1)
+    #     end_date = (start_date + pd.DateOffset(months=1)) - pd.DateOffset(days=1)
+    #
+    #     # Filter rows by the given month and year
+    #     filtered_df = df[(df[datetime_column] >= start_date) & (df[datetime_column] <= end_date)]
+    #
+    #     # Select relevant columns
+    #     result_df = filtered_df.iloc[:, [0, 2, 3, 4, 5]]
+    #
+    #     # Rename columns
+    #     result_df.columns = ['Date', 'Morning In', 'Morning Out', 'Afternoon In', 'Afternoon Out']
+    #
+    #     # Convert DataFrame to dictionary
+    #     attendance_data = result_df.to_dict(orient='records')
+    #     return attendance_data
+
+    import pandas as pd
+    from datetime import datetime
+
     def extract_attendance_data(self, df, month, year):
-        # Convert first column to datetime
-        df.iloc[:, 0] = pd.to_datetime(df.iloc[:, 0], format='%Y-%m-%dT%H:%M:%S.%f', errors='coerce')
+        # Assuming the first column contains the datetime information
+        datetime_column = df.columns[0]
+        # print(f"1. datetime_column: {datetime_column}")
+
+        df[datetime_column] = df[datetime_column].apply(lambda x: self.try_parsing_date(x) if pd.notnull(x) else pd.NaT)
+        # print(f"2. df with parsed dates:\n{df.head()}")
 
         # Create start and end dates for the given month and year
         start_date = datetime(int(year), int(month), 1)
         end_date = (start_date + pd.DateOffset(months=1)) - pd.DateOffset(days=1)
+        # print(f"3. start_date: {start_date}, end_date: {end_date}")
 
         # Filter rows by the given month and year
-        filtered_df = df[(df.iloc[:, 0] >= start_date) & (df.iloc[:, 0] <= end_date)]
+        filtered_df = df[(df[datetime_column] >= start_date) & (df[datetime_column] <= end_date)]
+        # print(f"4. filtered_df:\n{filtered_df.head()}")
 
         # Select relevant columns
         result_df = filtered_df.iloc[:, [0, 2, 3, 4, 5]]
+        # print(f"5. result_df with selected columns:\n{result_df.head()}")
 
         # Rename columns
         result_df.columns = ['Date', 'Morning In', 'Morning Out', 'Afternoon In', 'Afternoon Out']
+        # print(f"6. result_df with renamed columns:\n{result_df.head()}")
+
+        # Apply try_parsing_time to relevant columns
+        for col in ['Morning In', 'Morning Out', 'Afternoon In', 'Afternoon Out']:
+            result_df[col] = result_df[col].apply(lambda x: self.try_parsing_time(x) if pd.notnull(x) else pd.NaT)
+
 
         # Convert DataFrame to dictionary
         attendance_data = result_df.to_dict(orient='records')
+        # print(f"7. attendance_data:\n{attendance_data}")
+
         return attendance_data
 
     def get_or_create_employee(self, employee_info):
@@ -439,6 +553,7 @@ class SalaryCalculationView(APIView):
 
         # Tính tổng số giờ
         total_hours = (total_hour_none_bonus
+                       + sunday_hours
                        + holiday_hours
                        + worked_holiday_hours * config.holiday_multiplier
                        + worked_day_off_hours * config.worked_day_off_multiplier
