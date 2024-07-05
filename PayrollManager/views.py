@@ -1,3 +1,8 @@
+
+
+from django.http import HttpResponse
+import openpyxl
+from openpyxl.styles import Font, Alignment, Border, Side
 import calendar
 import pandas as pd
 import xml.etree.ElementTree as ET
@@ -41,11 +46,30 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     serializer_class = AttendanceRecordSerializer
 
 
+# class SalaryViewSet(viewsets.ModelViewSet):
+#     queryset = Salary.objects.all()
+#     serializer_class = SalarySerializer
+#     filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
+#     filterset_fields = ['id', 'employee', 'month', 'year', 'total_hours', 'salary_amount']
+#     ordering_fields = ['employee', 'month', 'year', 'total_hours', 'salary_amount']
+#     search_fields = ['employee__name', 'employee__employee_code', 'month', 'year']
+#     ordering = ['employee']
+
+from django_filters import rest_framework as filters
+
+class SalaryFilter(filters.FilterSet):
+    department = filters.NumberFilter(field_name='employee__departments__id')
+
+    class Meta:
+        model = Salary
+        fields = ['id', 'department', 'employee', 'month', 'year']
+
+
 class SalaryViewSet(viewsets.ModelViewSet):
     queryset = Salary.objects.all()
     serializer_class = SalarySerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
-    filterset_fields = ['id', 'employee', 'month', 'year', 'total_hours', 'salary_amount']
+    filterset_class = SalaryFilter
     ordering_fields = ['employee', 'month', 'year', 'total_hours', 'salary_amount']
     search_fields = ['employee__name', 'employee__employee_code', 'month', 'year']
     ordering = ['employee']
@@ -229,57 +253,7 @@ class UploadAttendanceFileView(APIView):
             print(f"Error extracting info between '{start_keyword}' and '{end_keyword}': {e}")
             return None
 
-    # def extract_attendance_data(self, df, month, year):
-    #     # Convert first column to datetime
-    #     df.iloc[:, 0] = pd.to_datetime(df.iloc[:, 0], format='%Y-%m-%dT%H:%M:%S.%f', errors='coerce')    #
-    #
-    #     # Create start and end dates for the given month and year
-    #     start_date = datetime(int(year), int(month), 1)
-    #     end_date = (start_date + pd.DateOffset(months=1)) - pd.DateOffset(days=1)
-    #
-    #     # Filter rows by the given month and year
-    #     filtered_df = df[(df.iloc[:, 0] >= start_date) & (df.iloc[:, 0] <= end_date)]
-    #
-    #     # Select relevant columns
-    #     result_df = filtered_df.iloc[:, [0, 2, 3, 4, 5]]
-    #
-    #     # Rename columns
-    #     result_df.columns = ['Date', 'Morning In', 'Morning Out', 'Afternoon In', 'Afternoon Out']
-    #
-    #     # Convert DataFrame to dictionary
-    #     attendance_data = result_df.to_dict(orient='records')
-    #     return attendance_data
-    #
-    #
 
-    # def extract_attendance_data(self, df, month, year):
-    #
-    #     # Assuming the first column contains the datetime information
-    #     datetime_column = df.columns[0]
-    #
-    #     # Convert first column to datetime
-    #     # df[datetime_column] = pd.to_datetime(df[datetime_column], errors='coerce', infer_datetime_format=True)
-    #     df[datetime_column] = pd.to_datetime(df[datetime_column], errors='coerce')
-    #
-    #     # Create start and end dates for the given month and year
-    #     start_date = datetime(int(year), int(month), 1)
-    #     end_date = (start_date + pd.DateOffset(months=1)) - pd.DateOffset(days=1)
-    #
-    #     # Filter rows by the given month and year
-    #     filtered_df = df[(df[datetime_column] >= start_date) & (df[datetime_column] <= end_date)]
-    #
-    #     # Select relevant columns
-    #     result_df = filtered_df.iloc[:, [0, 2, 3, 4, 5]]
-    #
-    #     # Rename columns
-    #     result_df.columns = ['Date', 'Morning In', 'Morning Out', 'Afternoon In', 'Afternoon Out']
-    #
-    #     # Convert DataFrame to dictionary
-    #     attendance_data = result_df.to_dict(orient='records')
-    #     return attendance_data
-
-    import pandas as pd
-    from datetime import datetime
 
     def try_parsing_date(self, text):
         for fmt in ('%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%d/%m/%Y %H:%M:%S', '%d/%m/%Y'):
@@ -289,7 +263,6 @@ class UploadAttendanceFileView(APIView):
                 continue
         return pd.NaT
 
-    from datetime import time
 
     def try_parsing_time(self, text):
         for fmt in ('%H:%M', '%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S', '%H:%M:%S'):
@@ -300,65 +273,32 @@ class UploadAttendanceFileView(APIView):
                 continue
         return None
 
-    # def extract_attendance_data(self, df, month, year):
-    #     # Assuming the first column contains the datetime information
-    #     datetime_column = df.columns[0]
-    #
-    #     df[datetime_column] = df[datetime_column].apply(lambda x: self.try_parsing_date(x) if pd.notnull(x) else pd.NaT)
-    #
-    #     # Create start and end dates for the given month and year
-    #     start_date = datetime(int(year), int(month), 1)
-    #     end_date = (start_date + pd.DateOffset(months=1)) - pd.DateOffset(days=1)
-    #
-    #     # Filter rows by the given month and year
-    #     filtered_df = df[(df[datetime_column] >= start_date) & (df[datetime_column] <= end_date)]
-    #
-    #     # Select relevant columns
-    #     result_df = filtered_df.iloc[:, [0, 2, 3, 4, 5]]
-    #
-    #     # Rename columns
-    #     result_df.columns = ['Date', 'Morning In', 'Morning Out', 'Afternoon In', 'Afternoon Out']
-    #
-    #     # Convert DataFrame to dictionary
-    #     attendance_data = result_df.to_dict(orient='records')
-    #     return attendance_data
 
-    import pandas as pd
-    from datetime import datetime
 
     def extract_attendance_data(self, df, month, year):
         # Assuming the first column contains the datetime information
         datetime_column = df.columns[0]
-        # print(f"1. datetime_column: {datetime_column}")
 
         df[datetime_column] = df[datetime_column].apply(lambda x: self.try_parsing_date(x) if pd.notnull(x) else pd.NaT)
-        # print(f"2. df with parsed dates:\n{df.head()}")
 
         # Create start and end dates for the given month and year
         start_date = datetime(int(year), int(month), 1)
         end_date = (start_date + pd.DateOffset(months=1)) - pd.DateOffset(days=1)
-        # print(f"3. start_date: {start_date}, end_date: {end_date}")
 
         # Filter rows by the given month and year
         filtered_df = df[(df[datetime_column] >= start_date) & (df[datetime_column] <= end_date)]
-        # print(f"4. filtered_df:\n{filtered_df.head()}")
 
         # Select relevant columns
         result_df = filtered_df.iloc[:, [0, 2, 3, 4, 5]]
-        # print(f"5. result_df with selected columns:\n{result_df.head()}")
 
         # Rename columns
         result_df.columns = ['Date', 'Morning In', 'Morning Out', 'Afternoon In', 'Afternoon Out']
-        # print(f"6. result_df with renamed columns:\n{result_df.head()}")
 
-        # Apply try_parsing_time to relevant columns
         for col in ['Morning In', 'Morning Out', 'Afternoon In', 'Afternoon Out']:
-            result_df[col] = result_df[col].apply(lambda x: self.try_parsing_time(x) if pd.notnull(x) else pd.NaT)
-
+            result_df.loc[:, col] = result_df[col].apply(lambda x: self.try_parsing_time(x) if pd.notnull(x) else None)
 
         # Convert DataFrame to dictionary
         attendance_data = result_df.to_dict(orient='records')
-        # print(f"7. attendance_data:\n{attendance_data}")
 
         return attendance_data
 
@@ -562,7 +502,8 @@ class SalaryCalculationView(APIView):
         print(f'total hour {total_hours}')
 
         # Tính số tiền lương
-        salary_amount = math.ceil(total_hours) * config.hourly_wage
+        total_hours = math.ceil(total_hours)
+        salary_amount = total_hours * config.hourly_wage
 
         salary_data = {
             'employee': employee,
@@ -630,3 +571,263 @@ class SalaryCalculationView(APIView):
 
         return morning_duration, afternoon_duration, total_hours, errors
 
+
+
+
+
+
+def export_employee_salary_report(request, employee_code, month, year):
+    try:
+        # Lấy dữ liệu chấm công và lương từ database
+        employee = Employee.objects.get(employee_code=employee_code)
+        attendance_records = AttendanceRecord.objects.filter(employee=employee, date__year=year, date__month=month)
+        salary_record = Salary.objects.get(employee=employee, month=month, year=year)
+
+        # Tạo workbook và các sheet
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = 'Employee Report'
+
+
+        if salary_record.salary_amount == 0 or salary_record.salary_amount is None:
+            salary_calculation_view = SalaryCalculationView()
+            _, errors = salary_calculation_view.calculate_salary(employee, month, year)
+        else:
+
+            errors = []
+
+
+        print(errors)
+
+        sheet.column_dimensions['A'].width = 25
+        sheet.column_dimensions['B'].width = 15
+        sheet.column_dimensions['C'].width = 17
+        sheet.column_dimensions['D'].width = 17
+        sheet.column_dimensions['E'].width = 17
+        sheet.column_dimensions['F'].width = 17
+        sheet.column_dimensions['G'].width = 17
+
+        # Ghi tiêu đề
+        sheet['A1'] = 'Bảng chi tiết chấm công'
+        sheet['A1'].font = Font(size=14, bold=True)
+        sheet['A1'].alignment = Alignment(horizontal='center')
+        sheet.merge_cells('A1:F1')
+
+        # Ghi thông tin nhân viên
+        sheet['A2'] = f'Mã nhân viên: {employee.employee_code} Tên nhân viên: {employee.name} Bộ phận: {"".join([dept.name for dept in employee.departments.all()])}'
+        sheet.merge_cells('A2:F2')
+        sheet['A2'].font = Font(size=12)
+        sheet['A2'].alignment = Alignment(horizontal='center')
+
+        # Định dạng border
+        thin_border = Border(left=Side(style='thin'),
+                             right=Side(style='thin'),
+                             top=Side(style='thin'),
+                             bottom=Side(style='thin'))
+
+        # Ghi bảng chấm công
+        headers = ['Ngày', 'Thứ', 'Giờ vào buổi sáng', 'Giờ ra buổi sáng', 'Giờ vào buổi chiều', 'Giờ ra buổi chiều']
+        header_row = sheet.append(headers)
+        for cell in sheet[3]:
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = thin_border
+
+        # for record in attendance_records:
+        #     day_of_week = calendar.day_name[record.date.weekday()]
+        #     row = [
+        #         record.date.strftime('%d/%m/%Y'),
+        #         day_of_week,
+        #         record.morning_clock_in.strftime('%H:%M') if record.morning_clock_in else 'N/A',
+        #         record.morning_clock_out.strftime('%H:%M') if record.morning_clock_out else 'N/A',
+        #         record.afternoon_clock_in.strftime('%H:%M') if record.afternoon_clock_in else 'N/A',
+        #         record.afternoon_clock_out.strftime('%H:%M') if record.afternoon_clock_out else 'N/A'
+        #     ]
+        #     sheet.append(row)
+        #     for cell in sheet.iter_rows(min_row=sheet.max_row, max_row=sheet.max_row, min_col=1, max_col=6):
+        #         for c in cell:
+        #             c.alignment = Alignment(horizontal='center')
+        #             c.border = thin_border
+
+        def get_error_message(date, error_type):
+            date_obj = datetime.strptime(date, '%Y-%m-%d').date()  # Chuyển đổi ngày từ chuỗi về dạng datetime.date
+            for error in errors:
+                if error['date'] == date_obj:
+                    for err in error['errors']:
+                        if err['error_type'] == error_type:
+                            return "Missing time"
+            return "N/A"
+
+        for record in attendance_records:
+            day_of_week = calendar.day_name[record.date.weekday()]
+            row = [
+                record.date.strftime('%d/%m/%Y'),
+                day_of_week,
+                record.morning_clock_in.strftime('%H:%M') if record.morning_clock_in else get_error_message(record.date.strftime('%Y-%m-%d'), "morning_clock_in"),
+                record.morning_clock_out.strftime('%H:%M') if record.morning_clock_out else get_error_message(record.date.strftime('%Y-%m-%d'), "morning_clock_out"),
+                record.afternoon_clock_in.strftime('%H:%M') if record.afternoon_clock_in else get_error_message(record.date.strftime('%Y-%m-%d'), "afternoon_clock_in"),
+                record.afternoon_clock_out.strftime('%H:%M') if record.afternoon_clock_out else get_error_message(record.date.strftime('%Y-%m-%d'), "afternoon_clock_out")
+            ]
+            sheet.append(row)
+            for cell in sheet.iter_rows(min_row=sheet.max_row, max_row=sheet.max_row, min_col=1, max_col=6):
+                for c in cell:
+                    c.alignment = Alignment(horizontal='center')
+                    c.border = thin_border
+
+
+
+
+
+
+
+        # Thêm dòng trống giữa bảng chấm công và chi tiết lương
+        sheet.append([])
+
+        # Ghi chi tiết lương
+        sheet.append(['Chi tiết lương'])
+        sheet.cell(row=sheet.max_row, column=1).font = Font(bold=True)
+        sheet.cell(row=sheet.max_row, column=1).alignment = Alignment(horizontal='left')
+        salary_fields = [
+            ('Tháng', salary_record.month),
+            ('Năm', salary_record.year),
+            ('Ngày cơ bản sau lễ', salary_record.basic_days_after_holidays),
+            ('Giờ cơ bản sau lễ', salary_record.basic_hours_after_holidays),
+            ('Giờ làm việc thực tế', salary_record.actual_work_hours),
+            ('Ngày đi làm', salary_record.worked_days),
+            ('Giờ vi phạm', salary_record.penalty_hours),
+            ('Ngày nghỉ đi làm', salary_record.worked_day_off_days),
+            ('Giờ làm Chủ nhật', salary_record.sunday_hours),
+            ('Giờ lễ', salary_record.holiday_hours),
+            ('Giờ làm ngày lễ', salary_record.worked_holiday_hours),
+            ('Giờ trung bình mỗi ngày', salary_record.average_hours_per_day),
+            ('Giờ nghỉ đi làm', salary_record.worked_day_off_hours),
+            ('Giờ làm thêm', salary_record.overtime_hours),
+            ('Tổng giờ', salary_record.total_hours),
+            ('Số tiền lương', salary_record.salary_amount)
+        ]
+
+        for field_name, field_value in salary_fields:
+            row = sheet.append([field_name, field_value])
+            sheet.cell(row=sheet.max_row, column=1).font = Font(bold=True)
+            sheet.cell(row=sheet.max_row, column=1).alignment = Alignment(horizontal='left')
+            for cell in sheet.iter_rows(min_row=sheet.max_row, max_row=sheet.max_row, min_col=1, max_col=2):
+                for c in cell:
+                    c.border = thin_border
+
+
+
+        # Tạo response và đính kèm file Excel
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename={employee_code}_Report_{month}_{year}.xlsx'
+        workbook.save(response)
+        return response
+
+    except Employee.DoesNotExist:
+        return HttpResponse(status=404, content='Employee not found')
+    except Salary.DoesNotExist:
+        return HttpResponse(status=404, content='Salary record not found')
+
+from django.db.models import Q
+
+def export_salary_summary(request):
+    try:
+        # # Lấy dữ liệu lương từ database
+        # salaries = Salary.objects.filter(month=month, year=year)
+        #
+        # if department:
+        #     salaries = salaries.filter(employee__departments__id=department)
+
+        month = request.GET.get('month')  # Lấy tham số month
+        year = request.GET.get('year')  # Lấy tham số year
+        department = request.GET.get('department')  # Lấy tham số department
+
+        # Bắt đầu lọc dữ liệu
+        salaries = Salary.objects.all()
+        if month:
+            salaries = salaries.filter(month=month)
+        if year:
+            salaries = salaries.filter(year=year)
+        if department:
+            salaries = salaries.filter(employee__departments__id=department)
+
+        # Thay đổi tiêu đề dựa trên các tham số truyền vào
+        title_parts = []
+        if month:
+            title_parts.append(f'tháng {month}')
+        if year:
+            title_parts.append(f'năm {year}')
+        title = 'Báo cáo lương ' + ' '.join(title_parts) if title_parts else 'Báo cáo lương tổng hợp'
+
+
+
+        # Tạo workbook và các sheet
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = 'Monthly Salary Summary'
+
+        # Định dạng các cột
+        sheet.column_dimensions['A'].width = 15
+        sheet.column_dimensions['B'].width = 27
+        sheet.column_dimensions['C'].width = 35
+        sheet.column_dimensions['D'].width = 10
+        sheet.column_dimensions['E'].width = 10
+        sheet.column_dimensions['F'].width = 20
+
+        # Ghi tiêu đề chính
+        sheet.merge_cells('A1:F1')
+        title_cell = sheet['A1']
+        title_cell.value = title
+        # f'Báo cáo lương tháng {month}/{year}'
+        title_cell.font = Font(size=14, bold=True)
+        title_cell.alignment = Alignment(horizontal='center', vertical='center')
+
+        # Thêm dòng trống
+        sheet.append([])
+
+        # Ghi tiêu đề các cột
+        headers = ['Mã nhân viên', 'Tên nhân viên', 'Bộ phận', 'Tháng', 'Năm', 'Lương']
+        sheet.append(headers)
+        for cell in sheet[3]:
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='center')
+
+        # Định dạng border
+        thin_border = Border(left=Side(style='thin'),
+                             right=Side(style='thin'),
+                             top=Side(style='thin'),
+                             bottom=Side(style='thin'))
+
+        # Ghi dữ liệu lương vào sheet
+        for salary in salaries:
+            departments = ", ".join([dept.name for dept in salary.employee.departments.all()])
+            salary_amount = salary.salary_amount if salary.salary_amount is not None else 'Thiếu giờ check-in'
+            if salary_amount == 0:
+                salary_amount = 0
+
+            row = [
+                salary.employee.employee_code,
+                salary.employee.name,
+                departments,
+                salary.month,
+                salary.year,
+                salary_amount
+            ]
+            sheet.append(row)
+            for cell in sheet.iter_rows(min_row=sheet.max_row, max_row=sheet.max_row, min_col=1, max_col=6):
+                for c in cell:
+                    c.alignment = Alignment(horizontal='center')
+                    c.border = thin_border
+
+        # Thêm border cho toàn bộ bảng
+        for row in sheet.iter_rows(min_row=3, max_row=sheet.max_row, min_col=1, max_col=6):
+            for cell in row:
+                cell.border = thin_border
+
+        # Tạo response và đính kèm file Excel
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename=Salary_Summary_{month}_{year}.xlsx'
+        workbook.save(response)
+        return response
+
+    except Exception as e:
+        return HttpResponse(status=500, content=str(e))
