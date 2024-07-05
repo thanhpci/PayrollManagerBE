@@ -1,5 +1,3 @@
-
-
 from django.http import HttpResponse
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side
@@ -308,7 +306,6 @@ class UploadAttendanceFileView(APIView):
             employee_name = employee_info['employee_name']
             department_name = " ".join(employee_info['department_name'].split())
 
-            # Kiểm tra xem nhân viên đã tồn tại chưa
             employee = Employee.objects.filter(employee_code=employee_code).first()
             if employee:
                 return employee
@@ -316,9 +313,7 @@ class UploadAttendanceFileView(APIView):
             # Nếu nhân viên chưa tồn tại, tạo nhân viên mới
             employee = Employee.objects.create(employee_code=employee_code, name=employee_name)
 
-            # Kiểm tra và tạo phòng ban nếu có thông tin
             if department_name:
-                # Kiểm tra xem phòng ban đã tồn tại chưa (không phân biệt chữ hoa chữ thường)
                 department = Department.objects.filter(name__iexact=department_name).first()
                 if not department:
                     # Nếu phòng ban chưa tồn tại, tạo phòng ban mới
@@ -461,7 +456,6 @@ class SalaryCalculationView(APIView):
                 if afternoon_duration > 0:
                     worked_days += 5 / 8
                 print(worked_days)
-                # Kiểm tra và tính toán giờ làm việc vào Chủ nhật
                 if record.date.weekday() == calendar.SUNDAY:
                     sunday_hours += daily_hours
                     working_sunday_days += 1
@@ -633,22 +627,6 @@ def export_employee_salary_report(request, employee_code, month, year):
             cell.alignment = Alignment(horizontal='center')
             cell.border = thin_border
 
-        # for record in attendance_records:
-        #     day_of_week = calendar.day_name[record.date.weekday()]
-        #     row = [
-        #         record.date.strftime('%d/%m/%Y'),
-        #         day_of_week,
-        #         record.morning_clock_in.strftime('%H:%M') if record.morning_clock_in else 'N/A',
-        #         record.morning_clock_out.strftime('%H:%M') if record.morning_clock_out else 'N/A',
-        #         record.afternoon_clock_in.strftime('%H:%M') if record.afternoon_clock_in else 'N/A',
-        #         record.afternoon_clock_out.strftime('%H:%M') if record.afternoon_clock_out else 'N/A'
-        #     ]
-        #     sheet.append(row)
-        #     for cell in sheet.iter_rows(min_row=sheet.max_row, max_row=sheet.max_row, min_col=1, max_col=6):
-        #         for c in cell:
-        #             c.alignment = Alignment(horizontal='center')
-        #             c.border = thin_border
-
         def get_error_message(date, error_type):
             date_obj = datetime.strptime(date, '%Y-%m-%d').date()  # Chuyển đổi ngày từ chuỗi về dạng datetime.date
             for error in errors:
@@ -674,13 +652,7 @@ def export_employee_salary_report(request, employee_code, month, year):
                     c.alignment = Alignment(horizontal='center')
                     c.border = thin_border
 
-
-
-
-
-
-
-        # Thêm dòng trống giữa bảng chấm công và chi tiết lương
+        # Thêm dòng trống
         sheet.append([])
 
         # Ghi chi tiết lương
@@ -727,21 +699,15 @@ def export_employee_salary_report(request, employee_code, month, year):
     except Salary.DoesNotExist:
         return HttpResponse(status=404, content='Salary record not found')
 
-from django.db.models import Q
 
 def export_salary_summary(request):
     try:
-        # # Lấy dữ liệu lương từ database
-        # salaries = Salary.objects.filter(month=month, year=year)
-        #
-        # if department:
-        #     salaries = salaries.filter(employee__departments__id=department)
 
-        month = request.GET.get('month')  # Lấy tham số month
-        year = request.GET.get('year')  # Lấy tham số year
-        department = request.GET.get('department')  # Lấy tham số department
 
-        # Bắt đầu lọc dữ liệu
+        month = request.GET.get('month')
+        year = request.GET.get('year')
+        department = request.GET.get('department')
+
         salaries = Salary.objects.all()
         if month:
             salaries = salaries.filter(month=month)
@@ -750,7 +716,6 @@ def export_salary_summary(request):
         if department:
             salaries = salaries.filter(employee__departments__id=department)
 
-        # Thay đổi tiêu đề dựa trên các tham số truyền vào
         title_parts = []
         if month:
             title_parts.append(f'tháng {month}')
@@ -760,12 +725,10 @@ def export_salary_summary(request):
 
 
 
-        # Tạo workbook và các sheet
         workbook = openpyxl.Workbook()
         sheet = workbook.active
         sheet.title = 'Monthly Salary Summary'
 
-        # Định dạng các cột
         sheet.column_dimensions['A'].width = 15
         sheet.column_dimensions['B'].width = 27
         sheet.column_dimensions['C'].width = 35
@@ -773,31 +736,25 @@ def export_salary_summary(request):
         sheet.column_dimensions['E'].width = 10
         sheet.column_dimensions['F'].width = 20
 
-        # Ghi tiêu đề chính
         sheet.merge_cells('A1:F1')
         title_cell = sheet['A1']
         title_cell.value = title
-        # f'Báo cáo lương tháng {month}/{year}'
         title_cell.font = Font(size=14, bold=True)
         title_cell.alignment = Alignment(horizontal='center', vertical='center')
 
-        # Thêm dòng trống
         sheet.append([])
 
-        # Ghi tiêu đề các cột
         headers = ['Mã nhân viên', 'Tên nhân viên', 'Bộ phận', 'Tháng', 'Năm', 'Lương']
         sheet.append(headers)
         for cell in sheet[3]:
             cell.font = Font(bold=True)
             cell.alignment = Alignment(horizontal='center')
 
-        # Định dạng border
         thin_border = Border(left=Side(style='thin'),
                              right=Side(style='thin'),
                              top=Side(style='thin'),
                              bottom=Side(style='thin'))
 
-        # Ghi dữ liệu lương vào sheet
         for salary in salaries:
             departments = ", ".join([dept.name for dept in salary.employee.departments.all()])
             salary_amount = salary.salary_amount if salary.salary_amount is not None else 'Thiếu giờ check-in'
@@ -823,7 +780,6 @@ def export_salary_summary(request):
             for cell in row:
                 cell.border = thin_border
 
-        # Tạo response và đính kèm file Excel
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = f'attachment; filename=Salary_Summary_{month}_{year}.xlsx'
         workbook.save(response)
